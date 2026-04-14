@@ -10,35 +10,157 @@ from render import render_response
 load_dotenv()
 
 st.set_page_config(
-    page_title="Power BI AI Assistant",
+    page_title="PowerBI AI Assistant",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-st.markdown(
-    """
+st.markdown("""
 <style>
-[data-testid="stAppViewContainer"] { background: #0f1117; }
-[data-testid="stSidebar"]          { background: #161b27; border-right: 1px solid #2a2f3d; }
-.sidebar-title { font-size: 1.15rem; font-weight: 700; color: #e2e8f0; letter-spacing: .03em; margin-bottom: .1rem; }
-.sidebar-sub   { font-size: .75rem; color: #8892a4; margin-bottom: 1rem; }
-.badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: .75rem; font-weight: 600; }
-.badge-connected    { background: #1a3a2a; color: #4ade80; border: 1px solid #166534; }
-.badge-disconnected { background: #2a1a1a; color: #f87171; border: 1px solid #7f1d1d; }
-[data-testid="stChatMessage"] { border-radius: 12px; margin-bottom: .5rem; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+* { box-sizing: border-box; }
+html, body, [data-testid="stAppViewContainer"] {
+    font-family: 'Inter', sans-serif;
+    background: #f8f9fc;
+    color: #1a1f2e;
+}
+
+/* ── Sidebar ── */
+[data-testid="stSidebar"] {
+    background: #ffffff !important;
+    border-right: 1px solid #e2e6ef;
+}
+[data-testid="stSidebar"] > div:first-child { padding: 1.5rem 1rem; }
+
+/* ── Main area ── */
+[data-testid="stAppViewContainer"] > .main { background: #f8f9fc; }
+.block-container {
+    padding-top: 0 !important;
+    padding-bottom: 90px !important;
+    max-width: 860px !important;
+    margin: 0 auto;
+}
+
+/* ── Sticky header ── */
+.sticky-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: #f8f9fc;
+    border-bottom: 1px solid #e2e6ef;
+    padding: 0.65rem 0 0.75rem;
+    margin-bottom: 1rem;
+}
+
+/* ── Buttons ── */
+div.stButton > button {
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    font-size: 0.85rem;
+    border-radius: 8px;
+    border: 1px solid #e2e6ef;
+    background: #ffffff;
+    color: #64748b;
+    transition: all 0.2s;
+}
+div.stButton > button:hover {
+    border-color: #6366f1;
+    color: #6366f1;
+    background: #f5f3ff;
+}
 div.stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    border: none; border-radius: 8px; font-weight: 600;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    border: none;
+    color: #fff;
+    font-weight: 600;
+    letter-spacing: 0.02em;
 }
 div.stButton > button[kind="primary"]:hover {
-    background: linear-gradient(135deg, #818cf8, #a78bfa);
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    box-shadow: 0 4px 14px rgba(99,102,241,0.35);
 }
-</style>
-""",
-    unsafe_allow_html=True,
-)
 
+/* ── Selectbox ── */
+[data-testid="stSelectbox"] > div > div {
+    background: #ffffff !important;
+    border: 1px solid #e2e6ef !important;
+    border-radius: 8px !important;
+    color: #1a1f2e !important;
+}
+
+/* ── Chat messages ── */
+[data-testid="stChatMessage"] {
+    background: transparent !important;
+    border: none !important;
+    padding: 0.4rem 0 !important;
+}
+
+/* ── Status widget ── */
+[data-testid="stStatusWidget"] {
+    background: #ffffff !important;
+    border: 1px solid #e2e6ef !important;
+    border-radius: 10px !important;
+}
+
+/* ── Expanders ── */
+[data-testid="stExpander"] {
+    background: #ffffff !important;
+    border: 1px solid #e2e6ef !important;
+    border-radius: 8px !important;
+}
+
+/* ── Code blocks ── */
+[data-testid="stCodeBlock"] {
+    background: #f1f5f9 !important;
+    border: 1px solid #e2e6ef !important;
+    border-radius: 8px !important;
+}
+
+/* ── Dataframe ── */
+[data-testid="stDataFrame"] {
+    border: 1px solid #e2e6ef !important;
+    border-radius: 10px !important;
+    overflow: hidden !important;
+}
+
+/* ── Chat input — fixed bottom ── */
+[data-testid="stBottom"] {
+    background: #f8f9fc !important;
+    border-top: 1px solid #e2e6ef !important;
+    padding: 10px 0 !important;
+}
+[data-testid="stChatInput"] textarea {
+    background: #ffffff !important;
+    border: 1.5px solid #e2e6ef !important;
+    border-radius: 24px !important;
+    color: #1a1f2e !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 0.92rem !important;
+    padding: 12px 20px !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05) !important;
+    transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+[data-testid="stChatInput"] textarea:focus {
+    border-color: #6366f1 !important;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.12), 0 2px 8px rgba(0,0,0,0.05) !important;
+    outline: none !important;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #f8f9fc; }
+::-webkit-scrollbar-thumb { background: #e2e6ef; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+
+hr { border-color: #e2e6ef !important; margin: 1rem 0 !important; }
+</style>
+""", unsafe_allow_html=True)
+
+# ------------------------------------------------------------------ #
+#  Session state                                                      #
+# ------------------------------------------------------------------ #
 
 DEFAULTS = {
     "messages": [],
@@ -53,20 +175,50 @@ DEFAULTS = {
     "datasets": [],
     "selected_workspace": None,
     "selected_dataset": None,
+    "dax_cache": {},
 }
 for k, v in DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
+# ------------------------------------------------------------------ #
+#  Sidebar                                                            #
+# ------------------------------------------------------------------ #
 
 with st.sidebar:
-    st.markdown('<p class="sidebar-title">Power BI AI Assistant</p>', unsafe_allow_html=True)
-    st.markdown('<p class="sidebar-sub">Semantic Model Explorer</p>', unsafe_allow_html=True)
+    st.markdown("""
+    <div style="margin-bottom:1.5rem">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+            <div style="width:32px;height:32px;border-radius:8px;
+                background:linear-gradient(135deg,#6366f1,#8b5cf6);
+                display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24"
+                    fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+                    <line x1="6" y1="20" x2="6" y2="14"/>
+                </svg>
+            </div>
+            <span style="font-size:1rem;font-weight:600;color:#1a1f2e;
+                letter-spacing:0.02em">PowerBI AI Assistant</span>
+        </div>
+        <p style="font-size:0.72rem;color:#94a3b8;margin:0 0 0 42px">
+            Semantic Model Explorer
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
+    # ── Step 1: not started ──
     if not st.session_state.session_started:
-        st.markdown("#### Step 1 — Load Workspaces")
-        st.caption("Fetches workspaces via REST API using the service principal.")
-        if st.button("Start", type="primary", use_container_width=True):
+        st.markdown("""
+        <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;
+            padding:14px 16px;margin-bottom:1rem">
+            <p style="font-size:0.78rem;color:#7c3aed;font-weight:600;margin:0 0 6px">STEP 1</p>
+            <p style="font-size:0.88rem;color:#64748b;margin:0">
+                Authenticate and load your Power BI workspaces to get started.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("Connect to Power BI", type="primary", use_container_width=True):
             with st.spinner("Authenticating…"):
                 try:
                     client = PowerBIMCPClient(
@@ -83,28 +235,31 @@ with st.sidebar:
                 except Exception as e:
                     st.error(f"Failed: {e}")
 
+    # ── Step 2: started, not connected ──
     elif not st.session_state.connected:
         client = st.session_state.client
-        st.markdown("#### Step 2 — Choose Workspace & Model")
+        st.markdown("""
+        <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;
+            padding:14px 16px;margin-bottom:1rem">
+            <p style="font-size:0.78rem;color:#7c3aed;font-weight:600;margin:0 0 6px">STEP 2</p>
+            <p style="font-size:0.88rem;color:#64748b;margin:0">
+                Choose a workspace and semantic model to query.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
 
         workspaces = st.session_state.workspaces
         if not workspaces:
             st.warning("No workspaces found. Check service principal permissions.")
         else:
-            ws = st.selectbox(
-                "Workspace",
-                options=workspaces,
-                index=(
-                    workspaces.index(st.session_state.selected_workspace)
-                    if st.session_state.selected_workspace in workspaces
-                    else 0
-                ),
-                key="ws_select",
-            )
+            ws = st.selectbox("Workspace", options=workspaces,
+                index=(workspaces.index(st.session_state.selected_workspace)
+                       if st.session_state.selected_workspace in workspaces else 0),
+                key="ws_select")
 
             if ws != st.session_state.selected_workspace:
                 st.session_state.selected_workspace = ws
-                with st.spinner("Loading semantic models…"):
+                with st.spinner("Loading models…"):
                     st.session_state.datasets = client.list_datasets(ws)
                 st.rerun()
 
@@ -114,31 +269,26 @@ with st.sidebar:
             else:
                 ds = st.selectbox("Semantic Model", options=datasets, key="ds_select")
                 st.session_state.selected_dataset = ds
+                st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
-                if st.button("Connect", type="primary", use_container_width=True):
+                if st.button("Launch Assistant", type="primary", use_container_width=True):
                     with st.spinner("Starting MCP server…"):
                         try:
                             client.start_session()
                         except Exception as e:
                             st.error(f"MCP start failed: {e}")
                             st.stop()
-
-                    with st.spinner(f"Connecting to **{ds}**…"):
+                    with st.spinner(f"Connecting to {ds}…"):
                         try:
                             client.connect(ws, ds)
                         except Exception as e:
                             st.error(f"Connect failed: {e}")
                             st.stop()
-
-                    with st.spinner("Building schema…"):
+                    with st.spinner("Loading schema…"):
                         schema = client.build_schema()
                     st.session_state.schema = schema
-
-                    with st.spinner("Generating DAX examples for this model…"):
+                    with st.spinner("Generating DAX patterns…"):
                         cache_key = f"{ws}::{ds}"
-                        if "dax_cache" not in st.session_state:
-                            st.session_state.dax_cache = {}
-
                         agent = LLMAgent(
                             endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
                             api_key=os.getenv("AZURE_OPENAI_API_KEY"),
@@ -154,34 +304,50 @@ with st.sidebar:
                     st.rerun()
 
         st.divider()
-        if st.button("Reset Session", use_container_width=True):
+        if st.button("↩ Reset", use_container_width=True):
             if st.session_state.client:
                 st.session_state.client.disconnect()
             for k, v in DEFAULTS.items():
                 st.session_state[k] = v
             st.rerun()
 
+    # ── Step 3: connected ──
     else:
-        st.markdown(
-            '<span class="badge badge-connected">● Connected</span>',
-            unsafe_allow_html=True,
-        )
-        st.caption(f"**Workspace:** {st.session_state.selected_workspace}")
-        st.caption(f"**Model:** {st.session_state.selected_dataset}")
+        st.markdown(f"""
+        <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);
+            border:1px solid #86efac;border-radius:10px;padding:14px 16px;margin-bottom:1rem">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                <div style="width:8px;height:8px;border-radius:50%;background:#16a34a"></div>
+                <span style="font-size:0.78rem;font-weight:600;color:#15803d">CONNECTED</span>
+            </div>
+            <p style="font-size:0.72rem;color:#64748b;margin:0 0 2px;font-weight:600;
+                letter-spacing:0.05em">WORKSPACE</p>
+            <p style="font-size:0.85rem;color:#374151;margin:0 0 8px;
+                white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                {st.session_state.selected_workspace}
+            </p>
+            <p style="font-size:0.72rem;color:#64748b;margin:0 0 2px;font-weight:600;
+                letter-spacing:0.05em">MODEL</p>
+            <p style="font-size:0.85rem;color:#4f46e5;margin:0;font-weight:500;
+                white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                {st.session_state.selected_dataset}
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
 
-        with st.expander("Schema", expanded=False):
+        with st.expander("📐 Schema", expanded=False):
             st.code(st.session_state.schema, language="text")
 
         if st.session_state.tool_log:
-            with st.expander("Last tool calls", expanded=False):
+            with st.expander(f"Last query trace ({len(st.session_state.tool_log)} steps)", expanded=False):
                 for i, step in enumerate(st.session_state.tool_log, 1):
-                    st.markdown(f"**Step {i} — `{step['tool']}`**")
+                    st.markdown(f"**Step {i}** — `{step['tool']}`")
                     st.caption(step["result"][:300])
 
         st.divider()
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("Clear chat", use_container_width=True):
+            if st.button("Clear", use_container_width=True):
                 st.session_state.messages = []
                 st.session_state.tool_log = []
                 st.rerun()
@@ -192,34 +358,199 @@ with st.sidebar:
                     st.session_state[k] = v
                 st.rerun()
 
-st.markdown("## Power BI Semantic Model Assistant")
+        if not st.session_state.messages:
+            st.divider()
+            st.markdown(
+                "<p style='font-size:0.75rem;color:#94a3b8;font-weight:600;"
+                "letter-spacing:0.05em;margin-bottom:8px'>QUICK START</p>",
+                unsafe_allow_html=True)
+            for s in ["What is the total revenue?", "Top 5 products by profit",
+                      "Monthly revenue trend", "YoY sales comparison"]:
+                if st.button(s, use_container_width=True, key=f"suggest_{s}"):
+                    st.session_state.pending_prompt = s
+                    st.rerun()
+
+# ------------------------------------------------------------------ #
+#  Main area — landing / not connected                                #
+# ------------------------------------------------------------------ #
 
 if not st.session_state.session_started:
-    st.info("Click **Start** in the sidebar to begin.")
-    examples = [
-        ("Revenue", "What is the total revenue this year?"),
-        ("Top Products", "Which product generates the most profit?"),
-        ("Trends", "Show me order count by month"),
-        ("Margins", "What is the profit margin percentage?"),
-        ("Traffic", "Which UTM source drives the most conversions?"),
-        ("Retention", "What is the repeat purchase rate by device?"),
-    ]
+    # Sticky header
+    st.markdown("""
+    <div class="sticky-header">
+        <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:30px;height:30px;border-radius:7px;flex-shrink:0;
+                background:linear-gradient(135deg,#6366f1,#8b5cf6);
+                display:flex;align-items:center;justify-content:center">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
+                    fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+                    <line x1="6" y1="20" x2="6" y2="14"/>
+                </svg>
+            </div>
+            <span style="font-size:0.95rem;font-weight:600;color:#1a1f2e">PowerBI AI Assistant</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="text-align:center;padding:2.5rem 0 2rem">
+        <div style="display:inline-flex;align-items:center;justify-content:center;
+            width:64px;height:64px;border-radius:16px;margin-bottom:1.25rem;
+            background:linear-gradient(135deg,#6366f1,#8b5cf6)">
+            <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24"
+                fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+                <line x1="6" y1="20" x2="6" y2="14"/>
+            </svg>
+        </div>
+        <h1 style="font-size:2rem;font-weight:600;color:#1a1f2e;margin:0 0 0.5rem;
+            letter-spacing:-0.02em">Power BI AI Assistant</h1>
+        <p style="font-size:1rem;color:#64748b;margin:0 0 2.5rem;max-width:480px;
+            margin-left:auto;margin-right:auto">
+            Ask questions about your semantic models in plain English.
+            Powered by GPT-4o and the Power BI MCP server.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
     cols = st.columns(3)
-    for i, (label, text) in enumerate(examples):
-        with cols[i % 3]:
-            st.markdown(
-                f"""<div style='background:#1a1f2e;border-radius:10px;padding:12px;
-                margin:4px 0;border:1px solid #2a2f3d'>
-                <span style='font-size:.9rem;color:#94a3b8'>{label}</span><br>
-                <span style='font-size:.85rem;color:#e2e8f0'>{text}</span></div>""",
-                unsafe_allow_html=True,
-            )
+    features = [
+        ('<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+         "Instant Insights", "Natural language to DAX — no query writing needed."),
+        ('<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>',
+         "ReAct Loop", "Multi-step reasoning with live tool call visibility."),
+        ('<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>',
+         "Schema-Aware", "Dynamic DAX patterns generated from your model."),
+    ]
+    for col, (icon_svg, title, desc) in zip(cols, features):
+        with col:
+            st.markdown(f"""
+            <div style="background:#ffffff;border:1px solid #e2e6ef;border-radius:12px;
+                padding:20px;text-align:center;height:150px;display:flex;
+                flex-direction:column;align-items:center;justify-content:center;
+                box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+                <div style="margin-bottom:10px">{icon_svg}</div>
+                <p style="font-size:0.88rem;font-weight:600;color:#1a1f2e;margin:0 0 6px">{title}</p>
+                <p style="font-size:0.78rem;color:#64748b;margin:0">{desc}</p>
+            </div>
+            """, unsafe_allow_html=True)
     st.stop()
 
 elif not st.session_state.connected:
-    st.info("Select a workspace and semantic model, then click **Connect**.")
+    # Sticky header
+    st.markdown("""
+    <div class="sticky-header">
+        <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:30px;height:30px;border-radius:7px;flex-shrink:0;
+                background:linear-gradient(135deg,#6366f1,#8b5cf6);
+                display:flex;align-items:center;justify-content:center">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
+                    fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+                    <line x1="6" y1="20" x2="6" y2="14"/>
+                </svg>
+            </div>
+            <span style="font-size:0.95rem;font-weight:600;color:#1a1f2e">PowerBI AI Assistant</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="text-align:center;padding:4rem 0">
+        <p style="font-size:1.5rem;font-weight:500;color:#1a1f2e;margin-bottom:0.5rem">
+            Choose your data source
+        </p>
+        <p style="color:#64748b;font-size:0.95rem;margin:0">
+            Select a workspace and semantic model in the sidebar,
+            then click <strong style="color:#6366f1">Launch Assistant</strong>.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     st.stop()
 
+# ------------------------------------------------------------------ #
+#  Main area — connected / chat                                       #
+# ------------------------------------------------------------------ #
+
+# Sticky header with model name + connected status
+st.markdown(f"""
+<div class="sticky-header">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:30px;height:30px;border-radius:7px;flex-shrink:0;
+                background:linear-gradient(135deg,#6366f1,#8b5cf6);
+                display:flex;align-items:center;justify-content:center">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
+                    fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+                    <line x1="6" y1="20" x2="6" y2="14"/>
+                </svg>
+            </div>
+            <div>
+                <span style="font-size:0.95rem;font-weight:600;color:#1a1f2e">
+                    {st.session_state.selected_dataset}
+                </span>
+                <span style="font-size:0.75rem;color:#94a3b8;margin-left:8px">
+                    {st.session_state.selected_workspace}
+                </span>
+            </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;
+            background:#f0fdf4;border:1px solid #86efac;
+            border-radius:20px;padding:4px 10px">
+            <div style="width:6px;height:6px;border-radius:50%;background:#16a34a"></div>
+            <span style="font-size:0.72rem;font-weight:600;color:#15803d">Connected</span>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ── Empty state ──
+if not st.session_state.messages:
+    st.markdown("""
+    <div style="text-align:center;padding:2.5rem 0 2rem">
+        <p style="font-size:1.4rem;font-weight:500;color:#1a1f2e;margin:0 0 0.4rem">
+            What would you like to know?
+        </p>
+        <p style="font-size:0.88rem;color:#64748b;margin:0">
+            Ask anything about your data — revenue, trends, segments, YoY comparisons.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    examples = [
+        ('<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>',
+         "Revenue", "What is total revenue by month?"),
+        ('<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+         "Top Products", "Which product has the highest profit margin?"),
+        ('<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
+         "Trends", "Show me order count over time"),
+        ('<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
+         "YoY", "Compare revenue this year vs last year"),
+        ('<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+         "Segments", "Break down sales by customer segment"),
+        ('<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.92"/></svg>',
+         "Returns", "What is the return rate by product?"),
+    ]
+    cols = st.columns(3)
+    for i, (icon_svg, label, text) in enumerate(examples):
+        with cols[i % 3]:
+            st.markdown(f"""
+            <div style="background:#ffffff;border:1px solid #e2e6ef;border-radius:10px;
+                padding:12px 14px;margin-bottom:4px;box-shadow:0 1px 2px rgba(0,0,0,0.04)">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+                    {icon_svg}
+                    <span style="font-size:0.78rem;color:#6366f1;font-weight:600">{label}</span>
+                </div>
+                <span style="font-size:0.8rem;color:#374151">{text}</span>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("Ask", key=f"ex_{i}", use_container_width=True):
+                st.session_state.pending_prompt = text
+                st.rerun()
+
+# ── Chat history ──
 for turn in st.session_state.messages:
     with st.chat_message(turn["role"]):
         if turn["role"] == "assistant":
@@ -227,6 +558,7 @@ for turn in st.session_state.messages:
         else:
             st.markdown(turn["content"])
 
+# ── Input ──
 if st.session_state.pending_prompt:
     prompt = st.session_state.pending_prompt
     st.session_state.pending_prompt = None
@@ -239,15 +571,13 @@ if prompt:
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        status = st.status("Thinking…", expanded=True)
-
+        status = st.status("Analysing…", expanded=True)
         answer, tool_log = st.session_state.agent.run(
             user_message=prompt,
             chat_history=st.session_state.messages[:-1],
             schema=st.session_state.schema,
             status_container=status,
         )
-
         st.session_state.tool_log = tool_log
         st.session_state.messages.append({"role": "assistant", "content": answer})
         render_response(answer)

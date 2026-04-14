@@ -1,0 +1,14 @@
+streamlit
+python-dotenv
+azure-identity
+mcp
+langchain
+langchain-openai
+openai
+pandas
+pydantic
+langchain-community
+langchain-core
+numpy
+langgraph
+requests

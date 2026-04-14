@@ -1,0 +1,5 @@
+.env
+__pycache__/
+*.pyc
+powerbi_poc/
+*.exe
