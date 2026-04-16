@@ -1,5 +1,12 @@
-.env
+echo ".env
 __pycache__/
 *.pyc
+*.pyo
 powerbi_poc/
 *.exe
+*.vsix
+*.zip
+.vscode/
+debug.py
+debug_tool.py
+check_rest.py" > .gitignore

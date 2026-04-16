@@ -409,7 +409,7 @@ if not st.session_state.session_started:
         <p style="font-size:1rem;color:#64748b;margin:0 0 2.5rem;max-width:480px;
             margin-left:auto;margin-right:auto">
             Ask questions about your semantic models in plain English.
-            Powered by GPT-4o and the Power BI MCP server.
+            Powered by GPT-5-Mini and the Power BI MCP server.
         </p>
     </div>
     """, unsafe_allow_html=True)
