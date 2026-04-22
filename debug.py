@@ -1,76 +1,57 @@
+import asyncio
 import json
 import os
-
 from dotenv import load_dotenv
 load_dotenv()
 
-from mcp_client import PowerBIMCPClient
+from azure.identity import ClientSecretCredential
+from mcp import ClientSession
+from mcp.client.stdio import StdioServerParameters, stdio_client
 
+MCP_EXE = os.getenv("MCP_EXE_PATH")
 WORKSPACE = "PBI_AIBI_Migration"
-MODEL     = "Toy Factory Sales Report_v2"
+MODEL = "Toy Factory Sales Report Coe"
 
-client = PowerBIMCPClient(
-    tenant_id=os.getenv("TENANT_ID"),
-    client_id=os.getenv("CLIENT_ID"),
-    client_secret=os.getenv("CLIENT_SECRET"),
-    mcp_exe_path=os.getenv("MCP_EXE_PATH"),
-)
+def get_token():
+    cred = ClientSecretCredential(
+        os.getenv("TENANT_ID"),
+        os.getenv("CLIENT_ID"),
+        os.getenv("CLIENT_SECRET"),
+    )
+    return cred.get_token("https://analysis.windows.net/powerbi/api/.default").token
 
-print("Starting session...")
-client.start_session()
+async def main():
+    token = get_token()
+    print(f"Token (first 40 chars): {token[:40]}")
 
-print("Connecting...")
-client.connect(WORKSPACE, MODEL)
-print("Connected.\n")
+    # Set env explicitly and verify
+    env = {**os.environ, "PBI_MODELING_MCP_ACCESS_TOKEN": token}
+    print(f"Env token set: {env.get('PBI_MODELING_MCP_ACCESS_TOKEN', 'NOT SET')[:40]}")
 
-# All calls below are from the main thread — same as how Streamlit calls them
-# No asyncio.run_coroutine_threadsafe wrapping needed here
+    params = StdioServerParameters(
+        command=MCP_EXE,
+        args=["--start", "--readonly"],
+        env=env,
+    )
 
-print("=" * 60)
-print("TEST 3: call_tool() sync wrapper from main thread")
-result = client.call_tool(
-    "dax_query_operations",
-    {"request": {"operation": "Execute", "query": "EVALUATE ROW(\"Test\", 1)"}}
-)
-print(f"Result: {result}\n")
+    print("Starting MCP session...")
+    async with stdio_client(params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            print("Session initialized. Attempting ConnectFabric...")
 
-print("=" * 60)
-print("TEST 4: Real DAX query — list products with sales")
-result2 = client.call_tool(
-    "dax_query_operations",
-    {
-        "request": {
-            "operation": "Execute",
-            "query": """EVALUATE
-TOPN(
-    5,
-    SUMMARIZECOLUMNS(
-        'products'[name],
-        \"Sales\", SUM('order_items'[sale_price])
-    ),
-    [Sales],
-    DESC
-)"""
-        }
-    }
-)
-print(f"Result: {json.dumps(result2)[:600]}\n")
+            result = await session.call_tool(
+                "connection_operations",
+                {
+                    "request": {
+                        "operation": "ConnectFabric",
+                        "workspaceName": WORKSPACE,
+                        "semanticModelName": MODEL,
+                        "clearCredential": False,
+                    }
+                },
+            )
+            resp = json.loads(result.content[0].text)
+            print(f"ConnectFabric result: {json.dumps(resp, indent=2)}")
 
-print("=" * 60)
-print("TEST 5: Simulate exactly what LangGraph tool fn does")
-import concurrent.futures
-
-def simulate_langgraph_tool_call(tool_input_str):
-    tool_input = json.loads(tool_input_str)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-        future = ex.submit(client.call_tool, "dax_query_operations", tool_input)
-        return future.result(timeout=60)
-
-agent_input = json.dumps({
-    "request": {
-        "operation": "Execute",
-        "query": "EVALUATE ROW(\"AgentTest\", 42)"
-    }
-})
-result3 = simulate_langgraph_tool_call(agent_input)
-print(f"Result: {result3}")
+asyncio.run(main()) 
