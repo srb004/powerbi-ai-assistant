@@ -1,7 +1,9 @@
+# mcp_client.py
 import asyncio
 import json
 import os
 import threading
+
 import requests
 from azure.identity import ClientSecretCredential
 from mcp import ClientSession
@@ -21,8 +23,8 @@ class PowerBIMCPClient:
         self.workspace_name = ""
         self.semantic_model_name = ""
         self._token_cache = None
+
         self._loop = asyncio.new_event_loop()
-        self._mcp_lock = asyncio.Lock()    
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
 
@@ -52,11 +54,11 @@ class PowerBIMCPClient:
             timeout=30,
         )
         resp.raise_for_status()
-        return [w["name"] for w in resp.json().get("value", [])]
+        workspaces = resp.json().get("value", [])
+        return [w["name"] for w in workspaces]
 
     def list_datasets(self, workspace_name):
         token = self._token_cache or self._get_access_token()
-
         resp = requests.get(
             "https://api.powerbi.com/v1.0/myorg/groups",
             headers={"Authorization": f"Bearer {token}"},
@@ -67,7 +69,6 @@ class PowerBIMCPClient:
         ws = next((w for w in workspaces if w["name"] == workspace_name), None)
         if not ws:
             return []
-
         ws_id = ws["id"]
         resp2 = requests.get(
             f"https://api.powerbi.com/v1.0/myorg/groups/{ws_id}/datasets",
@@ -84,6 +85,7 @@ class PowerBIMCPClient:
 
     async def _start_session(self):
         token = self._get_access_token()
+        print(f"[AUTH] Using service principal token: {token[:30]}...")
         params = StdioServerParameters(
             command=self.mcp_exe_path,
             args=["--start", "--readonly"],
@@ -101,7 +103,7 @@ class PowerBIMCPClient:
                 f"workspace_name and semantic_model_name must be non-empty. "
                 f"Got: {workspace_name!r}, {semantic_model_name!r}"
             )
-        result = await self._locked_call(
+        result = await self.session.call_tool(
             "connection_operations",
             {
                 "request": {
@@ -111,36 +113,40 @@ class PowerBIMCPClient:
                 }
             },
         )
-        if not result.get("success"):
-            raise RuntimeError(
-                f"ConnectFabric failed: {result.get('message', 'unknown error')}"
-            )
+        data = json.loads(result.content[0].text)
+        if not data.get("success"):
+            raise RuntimeError(f"ConnectFabric failed: {data.get('message', 'unknown error')}")
         self.workspace_name = workspace_name
         self.semantic_model_name = semantic_model_name
         self.connected = True
-        return result
+        return data
 
-    async def _locked_call(self, tool_name: str, payload: dict):
+    async def _list_tools_async(self):
+        result = await self.session.list_tools()
+        return [
+            {
+                "name": t.name,
+                "description": t.description or "",
+                "inputSchema": t.inputSchema,
+            }
+            for t in result.tools
+        ]
 
-        async with self._mcp_lock:
-            if not self.session:
-                raise RuntimeError("MCP session not started.")
-            result = await self.session.call_tool(tool_name, payload)
-            text = result.content[0].text
-            print(f"[MCP RAW] tool={tool_name} response={text[:300]}")
-            try:
-                return json.loads(text)
-            except json.JSONDecodeError:
-                return {"success": False, "message": text}
-
-    async def _call_tool_async(self, tool_name: str, payload: dict):
-        return await self._locked_call(tool_name, payload)
+    async def _call_tool_async(self, tool_name, payload):
+        if not self.session:
+            raise RuntimeError("MCP session not started.")
+        result = await self.session.call_tool(tool_name, payload)
+        text = result.content[0].text
+        print(f"[MCP RAW] tool={tool_name} response={text[:300]}")
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return {"success": False, "message": text}
 
     async def _build_schema_async(self):
-
         lines = []
 
-        tables_data = await self._locked_call(
+        tables_data = await self._call_tool_async(
             "table_operations", {"request": {"operation": "List"}}
         )
         if not tables_data.get("success"):
@@ -154,7 +160,7 @@ class PowerBIMCPClient:
 
         lines.append("=== TABLES & COLUMNS ===")
         for table in tables:
-            col_data = await self._locked_call(
+            col_data = await self._call_tool_async(
                 "column_operations",
                 {"request": {"operation": "List", "tableName": table["name"]}},
             )
@@ -169,33 +175,27 @@ class PowerBIMCPClient:
                         " [DATE — use YEAR('{}')[{}] for filtering]".format(
                             table["name"], c["name"]
                         )
-                        if dtype in ("DateTime", "Date")
-                        else ""
+                        if dtype in ("DateTime", "Date") else ""
                     )
                     cols.append(f"    {c['name']} ({dtype}){date_flag}")
-
             lines.append(f"\nTable: '{table['name']}'")
             if cols:
                 lines.extend(cols)
 
-        measures_data = await self._locked_call(
+        measures_data = await self._call_tool_async(
             "measure_operations", {"request": {"operation": "List"}}
         )
         if measures_data.get("success"):
             lines.append("\n=== MEASURES ===")
-            lines.append(
-                "Reference measures as [MeasureName] — "
-                "do NOT use SUM/COUNT on columns if a measure exists."
-            )
+            lines.append("Reference measures as [MeasureName] — do NOT use SUM/COUNT on columns if a measure exists.")
             for m in measures_data.get("data", []):
                 expr = m.get("expression", "")
                 expr_short = expr.replace("\n", " ")[:80] if expr else ""
-                if expr_short:
-                    lines.append(f"  [{m['name']}]  →  {expr_short}")
-                else:
-                    lines.append(f"  [{m['name']}]")
+                lines.append(
+                    f"  [{m['name']}]  →  {expr_short}" if expr_short else f"  [{m['name']}]"
+                )
 
-        rel_data = await self._locked_call(
+        rel_data = await self._call_tool_async(
             "relationship_operations", {"request": {"operation": "List"}}
         )
         if rel_data.get("success") and rel_data.get("data"):
@@ -207,17 +207,6 @@ class PowerBIMCPClient:
                 )
 
         return "\n".join(lines)
-
-    async def _list_tools_async(self):
-        result = await self.session.list_tools()
-        return [
-            {
-                "name": t.name,
-                "description": t.description or "",
-                "inputSchema": t.inputSchema,
-            }
-            for t in result.tools
-        ]
 
     async def _disconnect_async(self):
         self.connected = False
@@ -243,10 +232,9 @@ class PowerBIMCPClient:
     def list_tools(self):
         return self.run(self._list_tools_async())
 
-    def call_tool(self, tool_name: str, payload: dict):
-
+    def call_tool(self, tool_name, payload):
         future = asyncio.run_coroutine_threadsafe(
-            self._locked_call(tool_name, payload), self._loop
+            self._call_tool_async(tool_name, payload), self._loop
         )
         return future.result(timeout=60)
 

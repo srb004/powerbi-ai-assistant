@@ -1,8 +1,6 @@
 import os
-
 import streamlit as st
 from dotenv import load_dotenv
-
 from llm_agent import LLMAgent
 from mcp_client import PowerBIMCPClient
 from render import render_response
@@ -370,12 +368,7 @@ with st.sidebar:
                     st.session_state.pending_prompt = s
                     st.rerun()
 
-# ------------------------------------------------------------------ #
-#  Main area — landing / not connected                                #
-# ------------------------------------------------------------------ #
-
 if not st.session_state.session_started:
-    # Sticky header
     st.markdown("""
     <div class="sticky-header">
         <div style="display:flex;align-items:center;gap:10px">
