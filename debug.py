@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 from dotenv import load_dotenv
 load_dotenv()
@@ -8,7 +9,11 @@ from azure.identity import ClientSecretCredential
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
-MCP_EXE = os.getenv("MCP_EXE_PATH")
+# Silence the noisy "Failed to parse JSONRPC message" warnings emitted when
+# the npm wrapper prints its startup banner to stdout. See mcp_client.py.
+logging.getLogger("mcp.client.stdio").setLevel(logging.CRITICAL)
+
+PBI_MCP_NPM_PACKAGE = "@microsoft/powerbi-modeling-mcp"
 WORKSPACE = "PBI_AIBI_Migration"
 MODEL = "Toy Factory Sales Report Coe"
 
@@ -28,9 +33,16 @@ async def main():
     env = {**os.environ, "PBI_MODELING_MCP_ACCESS_TOKEN": token}
     print(f"Env token set: {env.get('PBI_MODELING_MCP_ACCESS_TOKEN', 'NOT SET')[:40]}")
 
+    npx_args = ["-y", PBI_MCP_NPM_PACKAGE, "--start", "--readonly"]
+    if os.name == "nt":
+        command, args = "cmd", ["/c", "npx", *npx_args]
+    else:
+        command, args = "npx", npx_args
+
+    print(f"Spawning MCP: {command} {' '.join(args)}")
     params = StdioServerParameters(
-        command=MCP_EXE,
-        args=["--start", "--readonly"],
+        command=command,
+        args=args,
         env=env,
     )
 

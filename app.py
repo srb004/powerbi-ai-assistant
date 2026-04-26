@@ -125,25 +125,65 @@ div.stButton > button[kind="primary"]:hover {
 
 /* ── Chat input — fixed bottom ── */
 [data-testid="stBottom"] {
-    background: #f8f9fc !important;
-    border-top: 1px solid #e2e6ef !important;
-    padding: 10px 0 !important;
+    background: linear-gradient(180deg, rgba(248,249,252,0) 0%, #f8f9fc 30%) !important;
+    border-top: none !important;
+    padding: 16px 0 18px !important;
 }
-[data-testid="stChatInput"] textarea {
+[data-testid="stChatInput"] {
+    max-width: 820px !important;
+    margin: 0 auto !important;
+    padding: 0 8px !important;
+}
+[data-testid="stChatInput"] > div {
     background: #ffffff !important;
     border: 1.5px solid #e2e6ef !important;
-    border-radius: 24px !important;
-    color: #1a1f2e !important;
-    font-family: 'Inter', sans-serif !important;
-    font-size: 0.92rem !important;
-    padding: 12px 20px !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05) !important;
+    border-radius: 28px !important;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06),
+                0 1px 3px rgba(15, 23, 42, 0.04) !important;
     transition: border-color 0.2s, box-shadow 0.2s !important;
 }
-[data-testid="stChatInput"] textarea:focus {
+[data-testid="stChatInput"] > div:focus-within {
     border-color: #6366f1 !important;
-    box-shadow: 0 0 0 3px rgba(99,102,241,0.12), 0 2px 8px rgba(0,0,0,0.05) !important;
+    box-shadow: 0 0 0 4px rgba(99,102,241,0.10),
+                0 4px 16px rgba(99,102,241,0.12) !important;
+}
+[data-testid="stChatInput"] textarea {
+    background: transparent !important;
+    border: none !important;
+    color: #1a1f2e !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 0.95rem !important;
+    padding: 14px 18px !important;
+    box-shadow: none !important;
+}
+[data-testid="stChatInput"] textarea:focus {
     outline: none !important;
+    box-shadow: none !important;
+}
+[data-testid="stChatInput"] textarea::placeholder {
+    color: #94a3b8 !important;
+}
+/* Send button — gradient to match brand */
+[data-testid="stChatInputSubmitButton"] {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+    border: none !important;
+    color: #ffffff !important;
+    border-radius: 50% !important;
+    width: 36px !important;
+    height: 36px !important;
+    margin-right: 6px !important;
+    transition: transform 0.15s, box-shadow 0.15s !important;
+}
+[data-testid="stChatInputSubmitButton"]:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99,102,241,0.35) !important;
+}
+[data-testid="stChatInputSubmitButton"]:disabled {
+    background: #e2e6ef !important;
+    color: #94a3b8 !important;
+}
+[data-testid="stChatInputSubmitButton"] svg {
+    fill: currentColor !important;
 }
 
 /* ── Scrollbar ── */
@@ -153,8 +193,38 @@ div.stButton > button[kind="primary"]:hover {
 ::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
 
 hr { border-color: #e2e6ef !important; margin: 1rem 0 !important; }
+
+/* ── Sidebar footer (Powered by LatentView Analytics Ltd.) ── */
+[data-testid="stSidebar"] > div:first-child {
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 100vh !important;
+}
+.lv-footer {
+    margin-top: auto !important;
+    padding: 1.25rem 0 0.5rem !important;
+    border-top: 1px solid #e2e6ef !important;
+    text-align: center !important;
+    font-size: 0.72rem !important;
+    color: #94a3b8 !important;
+    letter-spacing: 0.02em !important;
+}
+.lv-footer .lv-brand {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
 </style>
 """, unsafe_allow_html=True)
+
+LV_FOOTER_HTML = """
+<div class="lv-footer">
+    Powered by <span class="lv-brand">LatentView Analytics Ltd.</span>
+</div>
+"""
 
 # ------------------------------------------------------------------ #
 #  Session state                                                      #
@@ -223,7 +293,6 @@ with st.sidebar:
                         tenant_id=os.getenv("TENANT_ID"),
                         client_id=os.getenv("CLIENT_ID"),
                         client_secret=os.getenv("CLIENT_SECRET"),
-                        mcp_exe_path=os.getenv("MCP_EXE_PATH"),
                     )
                     st.session_state.client = client
                     with st.spinner("Fetching workspaces…"):
@@ -367,6 +436,9 @@ with st.sidebar:
                 if st.button(s, use_container_width=True, key=f"suggest_{s}"):
                     st.session_state.pending_prompt = s
                     st.rerun()
+
+    # Footer — shown in every sidebar state
+    st.markdown(LV_FOOTER_HTML, unsafe_allow_html=True)
 
 if not st.session_state.session_started:
     st.markdown("""
@@ -565,12 +637,18 @@ if prompt:
 
     with st.chat_message("assistant"):
         status = st.status("Analysing…", expanded=True)
+        # Placeholder for streaming tokens — sits between the status widget
+        # and the final rendered response. Cleared once the structured answer
+        # is ready so it doesn't duplicate the formatted view.
+        stream_placeholder = st.empty()
         answer, tool_log = st.session_state.agent.run(
             user_message=prompt,
             chat_history=st.session_state.messages[:-1],
             schema=st.session_state.schema,
             status_container=status,
+            stream_placeholder=stream_placeholder,
         )
+        stream_placeholder.empty()
         st.session_state.tool_log = tool_log
         st.session_state.messages.append({"role": "assistant", "content": answer})
         render_response(answer)

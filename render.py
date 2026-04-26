@@ -1,8 +1,15 @@
 import json
 import re
 
+import altair as alt
 import pandas as pd
 import streamlit as st
+
+# Brand palette — match the app's indigo/violet gradient.
+BRAND_INDIGO = "#6366f1"
+BRAND_VIOLET = "#8b5cf6"
+BRAND_AXIS = "#94a3b8"
+BRAND_GRID = "#e2e6ef"
 
 
 def clean_math_notation(text):
@@ -97,12 +104,56 @@ def render_response(content):
                         key=f"chart_col_{abs(hash(content))}",
                     )
                     label_col = df.columns[0]
-                    chart_df = df.set_index(label_col)[[chart_col]]
+                    chart_df = df[[label_col, chart_col]].copy()
+
+                    base = alt.Chart(chart_df).encode(
+                        x=alt.X(
+                            f"{label_col}:N",
+                            sort=None,
+                            title=None,
+                            axis=alt.Axis(
+                                labelColor=BRAND_AXIS,
+                                labelFontSize=11,
+                                labelAngle=-25,
+                                tickColor=BRAND_GRID,
+                                domainColor=BRAND_GRID,
+                            ),
+                        ),
+                        y=alt.Y(
+                            f"{chart_col}:Q",
+                            title=chart_col,
+                            axis=alt.Axis(
+                                labelColor=BRAND_AXIS,
+                                titleColor=BRAND_AXIS,
+                                gridColor=BRAND_GRID,
+                                domainColor=BRAND_GRID,
+                                labelFontSize=11,
+                                titleFontSize=11,
+                            ),
+                        ),
+                        tooltip=[label_col, chart_col],
+                    )
+
+                    bar_chart = base.mark_bar(
+                        color=BRAND_INDIGO,
+                        cornerRadiusTopLeft=4,
+                        cornerRadiusTopRight=4,
+                        size=24,
+                    ).properties(height=320, padding={"top": 10, "bottom": 10})
+
+                    line_chart = base.mark_line(
+                        color=BRAND_INDIGO,
+                        strokeWidth=2.5,
+                        point=alt.OverlayMarkDef(
+                            color=BRAND_VIOLET, size=70, filled=True
+                        ),
+                    ).properties(height=320, padding={"top": 10, "bottom": 10})
+
                     tab_bar, tab_line = st.tabs(["Bar", "Line"])
                     with tab_bar:
-                        st.bar_chart(chart_df)
+                        st.altair_chart(bar_chart, use_container_width=True)
                     with tab_line:
-                        st.line_chart(chart_df)
+                        st.altair_chart(line_chart, use_container_width=True)
 
         except Exception:
             st.code(str(parsed["table_rows"]))

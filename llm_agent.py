@@ -46,14 +46,64 @@ DAX SYNTAX RULES — violations cause query failures or bad data:
    CORRECT:  SUMMARIZECOLUMNS('pbi_products'[product_name], "Score", [Fulfillment Score])
    WRONG:    SUMMARIZECOLUMNS('pbi_order_items'[product_id], 'pbi_products'[product_name], ...)
 
-5. For "last N months" — use YEAR and MONTH arithmetic with DATE():
+5. RELATIVE DATES — anchor to MAX of the data, never hardcode a year.
+   Read the actual range from === DATA DATE RANGE === in the schema.
+
+   ⚠ ALL('table') vs ALL('table'[column]) — get this wrong and every
+   grouped row returns the same total:
+     GOOD:  FILTER(ALL('pbi_orders'[created_at]), 'pbi_orders'[created_at] >= StartDate)
+     BAD:   FILTER(ALL('pbi_orders'),            'pbi_orders'[created_at] >= StartDate)
+   ALL('pbi_orders') wipes ALL filters on pbi_orders including the dimension
+   filter coming from SUMMARIZECOLUMNS or a related table. Always restrict
+   ALL to the date column only.
+
+   Last N Months (single value):
    EVALUATE
-   ROW(
+   VAR MaxDate = CALCULATE(MAX('pbi_orders'[created_at]))
+   VAR StartDate = EDATE(MaxDate, -6)
+   RETURN ROW(
        "Net Profit Last 6M",
-       CALCULATE(
-           [Net Profit],
-           FILTER(ALL('pbi_orders'), 'pbi_orders'[created_at] >= DATE(2025, 10, 1))
-       )
+       CALCULATE([Net Profit],
+           FILTER(ALL('pbi_orders'[created_at]),
+                  'pbi_orders'[created_at] >= StartDate &&
+                  'pbi_orders'[created_at] <= MaxDate))
+   )
+
+   Year-over-Year (latest full year vs prior):
+   EVALUATE
+   VAR MaxDate = CALCULATE(MAX('pbi_orders'[created_at]))
+   VAR CY = YEAR(MaxDate)
+   RETURN ROW(
+       "This Year", CALCULATE([Total Revenue],
+           FILTER(ALL('pbi_orders'[created_at]),
+                  YEAR('pbi_orders'[created_at]) = CY)),
+       "Last Year", CALCULATE([Total Revenue],
+           FILTER(ALL('pbi_orders'[created_at]),
+                  YEAR('pbi_orders'[created_at]) = CY - 1))
+   )
+
+   Grouped by dimension WITH a date filter (e.g. revenue by utm_source for
+   the latest year — note ALL is still column-scoped):
+   EVALUATE
+   VAR MaxDate = CALCULATE(MAX('pbi_orders'[created_at]))
+   VAR CY = YEAR(MaxDate)
+   RETURN
+   SUMMARIZECOLUMNS(
+       'website_sessions'[utm_source],
+       "Revenue", CALCULATE([Total Revenue],
+           FILTER(ALL('pbi_orders'[created_at]),
+                  YEAR('pbi_orders'[created_at]) = CY)),
+       "Traffic", CALCULATE([Traffic],
+           FILTER(ALL('website_sessions'[created_at]),
+                  YEAR('website_sessions'[created_at]) = CY))
+   )
+
+   Monthly trend:
+   EVALUATE
+   SUMMARIZECOLUMNS(
+       'pbi_orders'[created_at].[Year],
+       'pbi_orders'[created_at].[Month],
+       "Revenue", [Total Revenue]
    )
 
 6. For simple scalar results use ROW():
@@ -61,9 +111,38 @@ DAX SYNTAX RULES — violations cause query failures or bad data:
 
 7. Only use table/column/measure names VERBATIM from the schema.
    Use [MeasureName] for existing measures — never recreate with SUM/COUNT.
+   If the user mentions a concept (e.g. "customer segment"), check both the
+   COLUMN INDEX and the MEASURES list — it may be a measure, a column, or both.
 
-8. Always use lowercase keys in tool calls:
-   {{"request": {{"operation": "Execute", "query": "EVALUATE ..."}}}}
+8. If a query returns BLANK or 0 unexpectedly, the date filter is almost
+   always the cause. Re-run with the MAX-anchored pattern from rule 5
+   instead of guessing a year.
+
+9. GRAIN CHECK — if SUMMARIZECOLUMNS returns the SAME value for every group,
+   the measure is at the wrong grain for that grouping. Read the measure's
+   DAX (shown after → in MEASURES) to find its source table, then either
+   pick a measure at the right grain or compute manually from line-item
+   columns. Filters flow only from the ONE side of a relationship to the
+   MANY side, so a product filter reaches pbi_order_items but NOT pbi_orders.
+
+   Example — Net Profit per product (compute at line-item grain):
+   EVALUATE
+   VAR MaxDate = CALCULATE(MAX('pbi_order_items'[created_at]))
+   VAR CY = YEAR(MaxDate)
+   RETURN
+   TOPN(5,
+       SUMMARIZECOLUMNS(
+           'pbi_products'[product_name],
+           "Net Profit", CALCULATE(
+               SUMX('pbi_order_items',
+                   'pbi_order_items'[price_usd] - 'pbi_order_items'[cogs_usd]),
+               FILTER(ALL('pbi_order_items'[created_at]),
+                      YEAR('pbi_order_items'[created_at]) = CY))
+       ),
+       [Net Profit], DESC)
+
+10. Always use lowercase keys in tool calls:
+    {{"request": {{"operation": "Execute", "query": "EVALUATE ..."}}}}
 
 VERIFIED DAX PATTERNS FOR THIS MODEL:
 {dax_examples}
@@ -311,14 +390,28 @@ class LLMAgent:
         tool_log: list[dict] = []
         answer = ""
         step_num = 0
+        stream_buffer = ""  # accumulates streaming text for the current agent turn
 
         try:
-            for event in self.graph.stream(
+            for stream_mode_name, payload in self.graph.stream(
                 {"messages": init_messages},
                 config={"recursion_limit": self._recursion_limit},
-                stream_mode="updates",
+                stream_mode=["updates", "messages"],
             ):
-                for node_name, node_output in event.items():
+                # ── Token stream from the LLM (incremental text) ──
+                if stream_mode_name == "messages":
+                    chunk, metadata = payload
+                    if metadata.get("langgraph_node") != "agent":
+                        continue
+                    chunk_content = getattr(chunk, "content", "")
+                    if isinstance(chunk_content, str) and chunk_content:
+                        stream_buffer += chunk_content
+                        if stream_placeholder is not None:
+                            stream_placeholder.markdown(stream_buffer + "▌")
+                    continue
+
+                # ── Node-level updates (tool calls, final answer) ──
+                for node_name, node_output in payload.items():
                     msgs = node_output.get("messages", [])
                     if not msgs:
                         continue
@@ -327,6 +420,11 @@ class LLMAgent:
                     if (node_name == "agent"
                             and isinstance(last_msg, AIMessage)
                             and last_msg.tool_calls):
+                        # Tool-calling turn — discard any streamed prelude text
+                        # so the next agent turn starts clean.
+                        stream_buffer = ""
+                        if stream_placeholder is not None:
+                            stream_placeholder.empty()
                         for tc in last_msg.tool_calls:
                             step_num += 1
                             dax = _extract_dax(tc.get("args", {}))
@@ -349,8 +447,15 @@ class LLMAgent:
                                 elif not rj.get("success", True):
                                     display = rj.get("message", "failed")[:120]
                                 else:
-                                    rows = rj.get("data", {})
-                                    display = f"{rows.get('rowCount','?') if isinstance(rows,dict) else '?'} rows"
+                                    data = rj.get("data", {})
+                                    count = None
+                                    if isinstance(data, dict):
+                                        count = data.get("rowCount")
+                                        if count is None and isinstance(data.get("rows"), list):
+                                            count = len(data["rows"])
+                                    elif isinstance(data, list):
+                                        count = len(data)
+                                    display = f"{count} rows" if count is not None else "ok"
                             except Exception:
                                 display = f"{len(content_str)} chars"
 
@@ -368,6 +473,8 @@ class LLMAgent:
             if not answer:
                 return f"Agent error: {e}", tool_log
 
+        # Final answer is in `answer`; the streamed buffer is now stale.
+        # The caller will replace the placeholder with a fully-rendered view.
         if status_container:
             status_container.update(
                 label=f"Done — {step_num} tool call(s)",
